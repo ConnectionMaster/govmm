@@ -267,10 +267,6 @@ func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if q.cfg.Logger.V(1) {
-			q.cfg.Logger.Infof("read from QMP: %s", string(line))
-		}
-
 		// Since []byte channel type transfer slice info(include slice underlying array pointer, len, cap)
 		// between channel sender and receiver. scanner.Bytes() returned slice's underlying array
 		// may point to data that will be overwritten by a subsequent call to Scan(reference from:
@@ -442,7 +438,6 @@ func (q *QMP) writeNextQMPCommand(cmdQueue *list.List) {
 		}
 		cmdQueue.Remove(cmdEl)
 	}
-	q.cfg.Logger.Infof("%s", string(encodedCmd))
 	encodedCmd = append(encodedCmd, '\n')
 	if unixConn, ok := q.conn.(*net.UnixConn); ok && len(cmd.oob) > 0 {
 		_, _, err = unixConn.WriteMsgUnix(encodedCmd, cmd.oob, nil)
@@ -1391,7 +1386,7 @@ func (q *QMP) ExecQueryCpusFast(ctx context.Context) ([]CPUInfoFast, error) {
 }
 
 // ExecMemdevAdd adds size of MiB memory device to the guest
-func (q *QMP) ExecMemdevAdd(ctx context.Context, qomtype, id, mempath string, size int, share bool, driver, driverID string) error {
+func (q *QMP) ExecMemdevAdd(ctx context.Context, qomtype, id, mempath string, size int, share bool, driver, driverID, addr, bus string) error {
 	props := map[string]interface{}{"size": uint64(size) << 20}
 	args := map[string]interface{}{
 		"qom-type": qomtype,
@@ -1424,6 +1419,14 @@ func (q *QMP) ExecMemdevAdd(ctx context.Context, qomtype, id, mempath string, si
 		"id":     driverID,
 		"memdev": id,
 	}
+
+	if bus != "" {
+		args["bus"] = bus
+	}
+	if addr != "" {
+		args["addr"] = addr
+	}
+
 	err = q.executeCommand(ctx, "device_add", args, nil)
 
 	return err
@@ -1431,7 +1434,7 @@ func (q *QMP) ExecMemdevAdd(ctx context.Context, qomtype, id, mempath string, si
 
 // ExecHotplugMemory adds size of MiB memory to the guest
 func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string, size int, share bool) error {
-	return q.ExecMemdevAdd(ctx, qomtype, id, mempath, size, share, "pc-dimm", "dimm"+id)
+	return q.ExecMemdevAdd(ctx, qomtype, id, mempath, size, share, "pc-dimm", "dimm"+id, "", "")
 }
 
 // ExecuteNVDIMMDeviceAdd adds a block device to a QEMU instance using
